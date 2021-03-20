@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Mappings:
+  General:
+    Stack:
+      NamePrefix: react_tic_tac_toe
+
+Globals:
+  Function:
+    Runtime: python3.8
+    CodeUri: src/
+    Tags:
+      Application: React_Tic_Tac_Toe
+
+Resources:
+
+  # ----- Http Api ----- #
+
+  # Core
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub
+        - ${NamePrefix}_http_api
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      ProtocolType: HTTP
+      Tags:
+        Application: React_Tic_Tac_Toe
+  HttpStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      Tags:
+        Application: React_Tic_Tac_Toe
+
+  # Routes
+  HttpHelloWorldRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: GET /
+      Target: !Sub integrations/${HttpHelloWorldIntegration}
+
+  # Integration: Hello World
+  HttpHelloWorldIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      PayloadFormatVersion: 2.0
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HttpHelloWorldFunction.Arn}/invocations
+  HttpHelloWorldPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HttpHelloWorldFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*
+
+  # ----- Functions ----- #
+
+  # Http
+  HttpHelloWorldFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub
+        - ${NamePrefix}_http_hello_world
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      Handler: ttt/functions/api/http/hello_world.lambda_handler
