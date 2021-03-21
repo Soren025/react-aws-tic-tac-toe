@@ -15,9 +15,9 @@ def lambda_handler(event, context):
         symbol = rooms_table.join_room(room_name, connection_id)
         if symbol is not None:
             clients_table.set_room(connection_id, room_name, symbol)
-            other_connection_id = rooms_table.get_other_client(room_name, symbol)
-            if other_connection_id is not None:
-                ws.send_message(other_connection_id, 'other_joined')
+            other_client = rooms_table.get_other_client(room_name, symbol)
+            if other_client is not None:
+                ws.send_message(other_client[rooms_table.ClientAttributeNames.CONNECTION_ID], 'other_joined')
             response_payload = {
                 'success': True,
                 'symbol': symbol,

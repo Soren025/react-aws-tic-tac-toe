@@ -5,7 +5,6 @@ from . import dynamodb
 
 class AttributeNames:
     CONNECTION_ID = 'connection_id'
-    READY = 'ready'
     ROOM_NAME = 'room_name'
     SYMBOL = 'symbol'
 
@@ -23,7 +22,6 @@ def add(connection_id):
     table.put_item(
         Item={
             AttributeNames.CONNECTION_ID: connection_id,
-            AttributeNames.READY: False,
         },
         ReturnValues='NONE',
     )

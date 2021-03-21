@@ -6,6 +6,7 @@ import boto3
 MESSAGE_TYPE_KEY = 'type'
 MESSAGE_PAYLOAD_KEY = 'payload'
 
+
 ws_client = boto3.client('apigatewaymanagementapi', endpoint_url=os.getenv('WS_CLIENT_ENDPOINT'))
 
 

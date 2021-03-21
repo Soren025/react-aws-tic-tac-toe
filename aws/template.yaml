@@ -197,6 +197,10 @@ Resources:
             TableName: !Ref ClientsTable
         - DynamoDBCrudPolicy:
             TableName: !Ref RoomsTable
+        - Statement:
+            Effect: Allow
+            Action: execute-api:ManageConnections
+            Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${WebSocketStage}/POST/@connections/*
 
   WebSocketDefaultFunction:
     Type: AWS::Serverless::Function

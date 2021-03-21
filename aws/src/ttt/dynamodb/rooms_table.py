@@ -9,7 +9,16 @@ from . import dynamodb
 
 class AttributeNames:
     ROOM_NAME = 'room_name'
-    CLIENTS = 'clients'
+    CONNECTION_IDS = 'connection_ids'
+    STATE = 'state'
+
+
+class ClientAttributeNames:
+    CONNECTION_ID = 'connection_id'
+    READY = 'ready'
+
+
+class StateAttributeNames:
     HISTORY = 'history'
     STEP_NUMBER = 'step_number'
     X_IS_NEXT = 'x_is_next'
@@ -39,14 +48,18 @@ def join_room_as(room_name, connection_id, symbol):
             Key=generate_key(room_name),
             ExpressionAttributeNames={
                 '#symbol': symbol,
-                '#clients': AttributeNames.CLIENTS,
+                '#connection_ids': AttributeNames.CONNECTION_IDS,
             },
             ExpressionAttributeValues={
                 ':connection_id': connection_id,
-                ':client': {connection_id},
+                ':connection_id_set': {connection_id},
+                ':client': {
+                    ClientAttributeNames.CONNECTION_ID: connection_id,
+                    ClientAttributeNames.READY: False,
+                }
             },
-            UpdateExpression='SET #symbol = :connection_id ADD #clients :client',
-            ConditionExpression='attribute_not_exists(#symbol) AND (NOT contains(#clients, :connection_id))',
+            UpdateExpression='SET #symbol = :client ADD #connection_ids :connection_id_set',
+            ConditionExpression='attribute_not_exists(#symbol) AND (NOT contains(#connection_ids, :connection_id))',
             ReturnValues='NONE',
         )
         return True
@@ -57,34 +70,72 @@ def join_room_as(room_name, connection_id, symbol):
             raise
 
 
+def get_client(room_name, symbol):
+    response = table.get_item(
+        Key=generate_key(room_name),
+        ConsistentRead=True,
+        ExpressionAttributeNames={
+            '#symbol': game.Symbols.X_VALUE,
+        },
+        ProjectionExpression='#symbol',
+    )
+
+    return response.get('Item', {}).get(symbol)
+
+
+def get_other_client(room_name, symbol):
+    return get_client(room_name, game.get_other_symbol(symbol))
+
+
 def get_clients(room_name):
     response = table.get_item(
         Key=generate_key(room_name),
         ConsistentRead=True,
         ExpressionAttributeNames={
-            '#clients': AttributeNames.CLIENTS,
+            '#x': game.Symbols.X_VALUE,
+            '#o': game.Symbols.O_VALUE,
         },
-        ProjectionExpression='#clients',
+        ProjectionExpression='#x, #o',
     )
 
-    return response.get('Item', {}).get(AttributeNames.CLIENTS, set())
+    item = response.get('Item')
+    if item is not None:
+        return {
+            game.Symbols.X_VALUE: item.get(game.Symbols.X_VALUE),
+            game.Symbols.O_VALUE: item.get(game.Symbols.O_VALUE),
+        }
+    else:
+        return {}
 
 
-def get_other_client(room_name, symbol):
-    other_symbol = game.get_other_symbol(symbol)
-    if other_symbol is None:
-        return None
-
-    response = table.get_item(
+def set_ready(room_name, symbol, ready):
+    response = table.update_item(
         Key=generate_key(room_name),
-        ConsistentRead=True,
         ExpressionAttributeNames={
-            '#symbol': other_symbol,
+            '#symbol': symbol,
+            '#client_ready': ClientAttributeNames.READY,
         },
-        ProjectionExpression='#symbol',
+        ExpressionAttributeValues={
+            ':ready': ready,
+        },
+        UpdateExpression='SET #symbol.#client_ready :ready',
+        ConditionExpression='attribute_exists(#symbol)',
+        ReturnValues='ALL_NEW'
     )
 
-    return response.get('Item', {}).get(other_symbol)
+    attributes = response['Attributes']
+    return (attributes.get(game.Symbols.X_VALUE, {}).get(ClientAttributeNames.READY, False) and
+            attributes.get(game.Symbols.O_VALUE, {}).get(ClientAttributeNames.READY, False))
+
+
+def set_all_not_ready(room_name):
+    clients = get_clients(room_name)
+
+    if game.Symbols.X_VALUE in clients:
+        set_ready(room_name, game.Symbols.X_VALUE, False)
+
+    if game.Symbols.O_VALUE in clients:
+        set_ready(room_name, game.Symbols.O_VALUE, False)
 
 
 def clear_symbol(room_name, symbol, connection_id):
@@ -93,25 +144,27 @@ def clear_symbol(room_name, symbol, connection_id):
             Key=generate_key(room_name),
             ExpressionAttributeNames={
                 '#symbol': symbol,
-                '#clients': AttributeNames.CLIENTS,
-                '#history': AttributeNames.HISTORY,
-                '#step_number': AttributeNames.STEP_NUMBER,
-                '#x_is_next': AttributeNames.X_IS_NEXT,
+                '#client_connection_id': ClientAttributeNames.CONNECTION_ID,
+                '#connection_ids': AttributeNames.CONNECTION_IDS,
+                '#state': AttributeNames.STATE,
             },
             ExpressionAttributeValues={
                 ':connection_id': connection_id,
-                ':client': {connection_id}
+                ':connection_id_set': {connection_id},
             },
-            UpdateExpression='REMOVE #symbol, #history, #step_number, #x_is_next DELETE #clients :client',
-            ConditionExpression='#symbol = :connection_id',
+            UpdateExpression='REMOVE #symbol, #state DELETE #connection_ids :connection_id_set',
+            ConditionExpression='#symbol.#client_connection_id = :connection_id',
             ReturnValues='ALL_NEW',
         )
 
-        other_client = response['Attributes'].get(game.get_other_symbol(symbol))
-        if other_client is None:
+        other_symbol = game.get_other_symbol(symbol)
+        other_client = response['Attributes'].get(other_symbol)
+        if other_client is not None:
+            set_ready(room_name, other_symbol, False)
+            return other_client[ClientAttributeNames.CONNECTION_ID]
+        else:
             remove(room_name)
-
-        return other_client
+            return None
     except ClientError as e:
         if e.response['Error']['Code'] != 'ConditionalCheckFailedException':
             raise

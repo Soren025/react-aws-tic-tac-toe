@@ -57,6 +57,8 @@ class Game extends React.Component {
             xIsNext: true,
         };
         this.client = null;
+        this.xReady = false;
+        this.yReady = false;
     }
 
     connect() {
