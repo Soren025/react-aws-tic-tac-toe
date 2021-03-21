@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
 
+Parameters:
+  LambdaLogLevel:
+    Type: String
+    AllowedValues: [NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL]
+    Default: INFO
+
 Mappings:
   General:
     Stack:
@@ -10,63 +16,213 @@ Globals:
   Function:
     Runtime: python3.8
     CodeUri: src/
+    Environment:
+      Variables:
+        LOG_LEVEL: !Ref LambdaLogLevel
+        CLIENTS_TABLE_NAME: !Ref ClientsTable
+        ROOMS_TABLE_NAME: !Ref RoomsTable
+        WS_CLIENT_ENDPOINT: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${WebSocketStage}
     Tags:
       Application: React_Tic_Tac_Toe
 
 Resources:
 
-  # ----- Http Api ----- #
+  # ----- Tables ----- #
+
+  # Game Servers
+  ClientsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub
+        - ${NamePrefix}_clients
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      AttributeDefinitions:
+        - AttributeName: connection_id
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: connection_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Application
+          Value: React_Tic_Tac_Toe
+
+  # Rooms
+  RoomsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub
+        - ${NamePrefix}_rooms
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      AttributeDefinitions:
+        - AttributeName: room_name
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: room_name
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      Tags:
+        - Key: Application
+          Value: React_Tic_Tac_Toe
+
+  # ----- Web Socket Api ----- #
 
   # Core
-  HttpApi:
+  WebSocketApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
       Name: !Sub
-        - ${NamePrefix}_http_api
+        - ${NamePrefix}_ws_api
         - NamePrefix: !FindInMap [General, Stack, NamePrefix]
-      ProtocolType: HTTP
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.type
       Tags:
         Application: React_Tic_Tac_Toe
-  HttpStage:
+  WebSocketStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
-      ApiId: !Ref HttpApi
-      StageName: $default
+      ApiId: !Ref WebSocketApi
+      StageName: prod
       AutoDeploy: true
       Tags:
         Application: React_Tic_Tac_Toe
 
-  # Routes
-  HttpHelloWorldRoute:
+  # Route: Connect
+  WebSocketConnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
-      ApiId: !Ref HttpApi
-      RouteKey: GET /
-      Target: !Sub integrations/${HttpHelloWorldIntegration}
-
-  # Integration: Hello World
-  HttpHelloWorldIntegration:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $connect
+      Target: !Sub integrations/${WebSocketConnectIntegration}
+  WebSocketConnectIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
-      ApiId: !Ref HttpApi
+      ApiId: !Ref WebSocketApi
       IntegrationType: AWS_PROXY
-      PayloadFormatVersion: 2.0
-      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HttpHelloWorldFunction.Arn}/invocations
-  HttpHelloWorldPermission:
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketConnectFunction.Arn}/invocations
+  WebSocketConnectPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref HttpHelloWorldFunction
+      FunctionName: !Ref WebSocketConnectFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/*
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+
+  # Route: Disconnect
+  WebSocketDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $disconnect
+      Target: !Sub integrations/${WebSocketDisconnectIntegration}
+  WebSocketDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDisconnectFunction.Arn}/invocations
+  WebSocketDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebSocketDisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+
+  # Route: Default
+  WebSocketDefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $default
+      Target: !Sub integrations/${WebSocketDefaultIntegration}
+  WebSocketDefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketDefaultFunction.Arn}/invocations
+  WebSocketDefaultPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebSocketDefaultFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+
+  # Route: JoinRoom
+  WebSocketJoinRoomRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: join_room
+      Target: !Sub integrations/${WebSocketJoinRoomIntegration}
+  WebSocketJoinRoomIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketJoinRoomFunction.Arn}/invocations
+  WebSocketJoinRoomPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebSocketJoinRoomFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
 
   # ----- Functions ----- #
 
-  # Http
-  HttpHelloWorldFunction:
+  # Web Socket
+  WebSocketConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub
-        - ${NamePrefix}_http_hello_world
+        - ${NamePrefix}_ws_connect
         - NamePrefix: !FindInMap [General, Stack, NamePrefix]
-      Handler: ttt/functions/api/http/hello_world.lambda_handler
+      Handler: ttt/functions/api/ws/connect.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+
+  WebSocketDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub
+        - ${NamePrefix}_ws_disconnect
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      Handler: ttt/functions/api/ws/disconnect.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+
+  WebSocketDefaultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub
+        - ${NamePrefix}_ws_default
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      Handler: ttt/functions/api/ws/default.lambda_handler
+
+  WebSocketJoinRoomFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub
+        - ${NamePrefix}_ws_join_room
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      Handler: ttt/functions/api/ws/join_room.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - Statement:
+            Effect: Allow
+            Action: execute-api:ManageConnections
+            Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${WebSocketStage}/POST/@connections/*
+
+Outputs:
+  WebSocketUrl:
+    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${WebSocketStage}

@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 
+// https://www.npmjs.com/package/websocket
+const W3CWebSocketClient = require('websocket').w3cwebsocket
+
 function Square(props) {
     return (
         <button className="square" onClick={() => props.onClick()}>
@@ -53,6 +56,42 @@ class Game extends React.Component {
             stepNumber: 0,
             xIsNext: true,
         };
+        this.client = null;
+    }
+
+    connect() {
+        if (!this.client) {
+            this.client = new W3CWebSocketClient('wss://nwsd1x3b66.execute-api.us-east-2.amazonaws.com/prod');
+            this.client.onerror = this.onClientError;
+            this.client.onopen = this.onClientOpen;
+            this.client.onclose = this.onClientClose;
+            this.client.onmessage = this.onClientMessage;
+        }
+    }
+
+    disconnect() {
+        if (this.client && this.client.readyState === this.client.OPEN) {
+            this.client.close();
+            this.client = null;
+        }
+    }
+
+    onClientError() {
+        console.log('Connection Error');
+    }
+
+    onClientOpen() {
+        console.log('WebSocket Client Connected');
+    }
+
+    onClientClose() {
+        console.log('echo-protocol Client Closed');
+    }
+
+    onClientMessage(message) {
+        if (typeof message.data === 'string') {
+            console.log("Received: '" + message.data + "'");
+        }
     }
 
     handleClick(i) {
