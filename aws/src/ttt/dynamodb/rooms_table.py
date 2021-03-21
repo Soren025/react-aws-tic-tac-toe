@@ -19,10 +19,25 @@ class ClientAttributeNames:
 
 
 class StateAttributeNames:
+    IS_PLAYING = 'is_playing'
     HISTORY = 'history'
     STEP_NUMBER = 'step_number'
     X_IS_NEXT = 'x_is_next'
 
+
+NEW_ROOM_STATE = {
+    StateAttributeNames.IS_PLAYING: False,
+    StateAttributeNames.HISTORY: [[None] * 9],
+    StateAttributeNames.STEP_NUMBER: 0,
+    StateAttributeNames.X_IS_NEXT: True,
+}
+
+START_GAME_STATE = {
+    StateAttributeNames.IS_PLAYING: True,
+    StateAttributeNames.HISTORY: [[None] * 9],
+    StateAttributeNames.STEP_NUMBER: 0,
+    StateAttributeNames.X_IS_NEXT: True,
+}
 
 table = dynamodb.Table(os.getenv('ROOMS_TABLE_NAME'))
 
@@ -49,6 +64,7 @@ def join_room_as(room_name, connection_id, symbol):
             ExpressionAttributeNames={
                 '#symbol': symbol,
                 '#connection_ids': AttributeNames.CONNECTION_IDS,
+                '#state': AttributeNames.STATE,
             },
             ExpressionAttributeValues={
                 ':connection_id': connection_id,
@@ -56,9 +72,10 @@ def join_room_as(room_name, connection_id, symbol):
                 ':client': {
                     ClientAttributeNames.CONNECTION_ID: connection_id,
                     ClientAttributeNames.READY: False,
-                }
+                },
+                ':new_room_state': NEW_ROOM_STATE,
             },
-            UpdateExpression='SET #symbol = :client ADD #connection_ids :connection_id_set',
+            UpdateExpression='SET #symbol = :client, #state = if_not_exists(#state, :new_room_state) ADD #connection_ids :connection_id_set',
             ConditionExpression='attribute_not_exists(#symbol) AND (NOT contains(#connection_ids, :connection_id))',
             ReturnValues='NONE',
         )
@@ -114,18 +131,40 @@ def set_ready(room_name, symbol, ready):
         ExpressionAttributeNames={
             '#symbol': symbol,
             '#client_ready': ClientAttributeNames.READY,
+            '#state': AttributeNames.STATE,
+            '#state_is_playing': StateAttributeNames.IS_PLAYING,
         },
         ExpressionAttributeValues={
             ':ready': ready,
+            ':false': False,
         },
-        UpdateExpression='SET #symbol.#client_ready :ready',
-        ConditionExpression='attribute_exists(#symbol)',
+        UpdateExpression='SET #symbol.#client_ready = :ready',
+        ConditionExpression='#state.#state_is_playing = :false AND attribute_exists(#symbol)',
         ReturnValues='ALL_NEW'
     )
 
     attributes = response['Attributes']
     return (attributes.get(game.Symbols.X_VALUE, {}).get(ClientAttributeNames.READY, False) and
             attributes.get(game.Symbols.O_VALUE, {}).get(ClientAttributeNames.READY, False))
+
+
+def start_game(room_name):
+    table.update_item(
+        Key=generate_key(room_name),
+        ExpressionAttributeNames={
+            '#x': game.Symbols.X_VALUE,
+            '#o': game.Symbols.O_VALUE,
+            '#client_ready': ClientAttributeNames.READY,
+            '#state': AttributeNames.STATE,
+        },
+        ExpressionAttributeValues={
+            ':start_game_state': START_GAME_STATE,
+            ':true': True,
+        },
+        UpdateExpression='SET #state = :start_game_state',
+        ConditionExpression='#x.#client_ready = :true AND #o.#client_ready = :true',
+        ReturnValues='NONE'
+    )
 
 
 def set_all_not_ready(room_name):
@@ -147,13 +186,15 @@ def clear_symbol(room_name, symbol, connection_id):
                 '#client_connection_id': ClientAttributeNames.CONNECTION_ID,
                 '#connection_ids': AttributeNames.CONNECTION_IDS,
                 '#state': AttributeNames.STATE,
+                '#state_is_playing': StateAttributeNames.IS_PLAYING,
             },
             ExpressionAttributeValues={
                 ':connection_id': connection_id,
                 ':connection_id_set': {connection_id},
+                ':false': False,
             },
-            UpdateExpression='REMOVE #symbol, #state DELETE #connection_ids :connection_id_set',
-            ConditionExpression='#symbol.#client_connection_id = :connection_id',
+            UpdateExpression='REMOVE #symbol DELETE #connection_ids :connection_id_set SET #state.#state_is_playing = :false',
+            ConditionExpression='attribute_exists(#symbol) AND #symbol.#client_connection_id = :connection_id',
             ReturnValues='ALL_NEW',
         )
 
