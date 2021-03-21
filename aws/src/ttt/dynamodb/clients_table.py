@@ -59,13 +59,29 @@ def set_room(connection_id, room_name, symbol):
     )
 
 
+def get_room(connection_id):
+    response = table.get_item(
+        Key=generate_key(connection_id),
+        ConsistentRead=True,
+        ExpressionAttributeNames={
+            '#room_name': AttributeNames.ROOM_NAME,
+            '#symbol': AttributeNames.SYMBOL,
+        },
+        ProjectionExpression='#room_name, #symbol'
+    )
+
+    return response.get('Item')
+
+
 def clear_room(connection_id):
-    table.update_item(
+    response = table.update_item(
         Key=generate_key(connection_id),
         ExpressionAttributeNames={
             '#room_name': AttributeNames.ROOM_NAME,
             '#symbol': AttributeNames.SYMBOL,
         },
         UpdateExpression='REMOVE #room_name, #symbol',
-        ReturnValues='NONE',
+        ReturnValues='UPDATED_OLD',
     )
+
+    return response.get('Item')

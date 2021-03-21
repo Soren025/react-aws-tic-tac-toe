@@ -115,14 +115,7 @@ def get_clients(room_name):
         ProjectionExpression='#x, #o',
     )
 
-    item = response.get('Item')
-    if item is not None:
-        return {
-            game.Symbols.X_VALUE: item.get(game.Symbols.X_VALUE),
-            game.Symbols.O_VALUE: item.get(game.Symbols.O_VALUE),
-        }
-    else:
-        return {}
+    return response.get('Item')
 
 
 def set_ready(room_name, symbol, ready):

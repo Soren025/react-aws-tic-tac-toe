@@ -7,8 +7,8 @@ from ttt import ws
 
 
 def lambda_handler(event, context):
+    connection_id = ws.get_connection_id(event)
     try:
-        connection_id = ws.get_connection_id(event)
         payload = ws.get_message_payload(event)
         room_name = payload['room_name']
 
@@ -35,6 +35,7 @@ def lambda_handler(event, context):
         }
     except Exception as e:
         logger.exception('Error joining room')
+        ws.send_message(connection_id, 'error')
         return {
             'statusCode': 500,
             'body': f'Error: {e}',
