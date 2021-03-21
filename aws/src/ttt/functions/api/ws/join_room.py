@@ -1,5 +1,5 @@
 from ttt.dynamodb import (
-    # clients_table,
+    clients_table,
     rooms_table,
 )
 from ttt.logging import logger
@@ -13,11 +13,21 @@ def lambda_handler(event, context):
         room_name = payload['room_name']
 
         symbol = rooms_table.join_room(room_name, connection_id)
-        logger.info(symbol)
-        ws.send_message(connection_id, 'join_room_response', {
-            'symbol': symbol
-        })
-        logger.info('send_message?')
+        if symbol is not None:
+            clients_table.set_room(connection_id, room_name, symbol)
+            other_connection_id = rooms_table.get_other_client(room_name, symbol)
+            if other_connection_id is not None:
+                ws.send_message(other_connection_id, 'other_joined')
+            response_payload = {
+                'success': True,
+                'symbol': symbol,
+            }
+        else:
+            response_payload = {
+                'success': False
+            }
+
+        ws.send_message(connection_id, 'join_room_response', response_payload)
 
         return {
             'statusCode': 200,

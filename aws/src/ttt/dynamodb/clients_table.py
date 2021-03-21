@@ -30,9 +30,19 @@ def add(connection_id):
 
 
 def remove(connection_id):
-    table.delete_item(
+    response = table.delete_item(
         Key=generate_key(connection_id),
+        ReturnValues='ALL_OLD',
     )
+
+    attributes = response['Attributes']
+    if AttributeNames.ROOM_NAME in attributes:
+        return {
+            AttributeNames.ROOM_NAME: attributes[AttributeNames.ROOM_NAME],
+            AttributeNames.SYMBOL: attributes[AttributeNames.SYMBOL],
+        }
+    else:
+        return None
 
 
 def set_room(connection_id, room_name, symbol):
