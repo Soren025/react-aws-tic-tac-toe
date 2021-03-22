@@ -80,6 +80,7 @@ class Game extends React.Component {
     }
 
     onClientError() {
+        this.client = null;
         console.log('Connection Error');
     }
 
@@ -88,6 +89,7 @@ class Game extends React.Component {
     }
 
     onClientClose() {
+        this.client = null;
         console.log('echo-protocol Client Closed');
     }
 

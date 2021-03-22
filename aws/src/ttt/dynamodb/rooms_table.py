@@ -142,7 +142,7 @@ def set_ready(room_name, symbol, ready):
 
 
 def start_game(room_name):
-    table.update_item(
+    response = table.update_item(
         Key=generate_key(room_name),
         ExpressionAttributeNames={
             '#x': game.Symbols.X_VALUE,
@@ -156,6 +156,35 @@ def start_game(room_name):
         },
         UpdateExpression='SET #state = :start_game_state',
         ConditionExpression='#x.#client_ready = :true AND #o.#client_ready = :true',
+        ReturnValues='UPDATED_NEW'
+    )
+
+    return response['Attributes'][AttributeNames.STATE]
+
+
+def get_state(room_name):
+    response = table.get_item(
+        Key=generate_key(room_name),
+        ConsistentRead=True,
+        ExpressionAttributeNames={
+            '#state': AttributeNames.STATE,
+        },
+        ProjectionExpression='#state',
+    )
+
+    return response['Item'][AttributeNames.STATE]
+
+
+def set_state(room_name, state):
+    table.update_item(
+        Key=generate_key(room_name),
+        ExpressionAttributeNames={
+            '#state': AttributeNames.STATE,
+        },
+        ExpressionAttributeValues={
+            ':state': state,
+        },
+        UpdateExpression='SET #state = :state',
         ReturnValues='NONE'
     )
 

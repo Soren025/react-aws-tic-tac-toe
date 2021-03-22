@@ -12,16 +12,15 @@ def lambda_handler(event, context):
             symbol = room_info[clients_table.AttributeNames.SYMBOL]
             other_connection_id = rooms_table.clear_symbol(room_name, symbol, connection_id)
             if other_connection_id is not None:
-                ws.send_message(other_connection_id, 'other_left')
+                ws.send_message(other_connection_id, ws.MessageTypes.OTHER_LEFT)
             response_payload = {
                 'success': True,
-                'room_left': room_name,
             }
         else:
             response_payload = {
                 'success': False
             }
-        ws.send_message(connection_id, 'leave_room_response', response_payload)
+        ws.send_message(connection_id, ws.MessageTypes.LEAVE_ROOM_RESPONSE, response_payload)
         return {
             'statusCode': 200,
             'body': 'Success',

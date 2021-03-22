@@ -17,17 +17,18 @@ def lambda_handler(event, context):
             clients_table.set_room(connection_id, room_name, symbol)
             other_client = rooms_table.get_other_client(room_name, symbol)
             if other_client is not None:
-                ws.send_message(other_client[rooms_table.ClientAttributeNames.CONNECTION_ID], 'other_joined')
+                ws.send_message(other_client[rooms_table.ClientAttributeNames.CONNECTION_ID], ws.MessageTypes.OTHER_JOINED)
             response_payload = {
                 'success': True,
                 'symbol': symbol,
+                'state': rooms_table.get_state(room_name)
             }
         else:
             response_payload = {
                 'success': False
             }
 
-        ws.send_message(connection_id, 'join_room_response', response_payload)
+        ws.send_message(connection_id, ws.MessageTypes.JOIN_ROOM_RESPONSE, response_payload)
 
         return {
             'statusCode': 200,

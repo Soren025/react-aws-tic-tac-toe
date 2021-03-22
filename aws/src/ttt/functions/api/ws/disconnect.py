@@ -13,7 +13,7 @@ def lambda_handler(event, context):
         logger.info('Removing disconnected client from room: room_name=%s symbol=%s', room_name, symbol)
         other_connection_id = rooms_table.clear_symbol(room_name, symbol, connection_id)
         if other_connection_id is not None:
-            ws.send_message(other_connection_id, 'other_left')
+            ws.send_message(other_connection_id, ws.MessageTypes.OTHER_LEFT)
     return {
         'statusCode': 200,
         'body': 'Success',
