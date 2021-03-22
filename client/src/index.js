@@ -63,7 +63,7 @@ class Game extends React.Component {
     }
 
     connect() {
-        if (this.client === null) {
+        if (!this.client) {
             this.client = new W3CWebSocketClient('wss://nwsd1x3b66.execute-api.us-east-2.amazonaws.com/prod');
             this.client.onerror = this.onClientError;
             this.client.onopen = this.onClientOpen;
