@@ -115,7 +115,7 @@ def get_clients(room_name):
         ProjectionExpression='#x, #o',
     )
 
-    return response.get('Item')
+    return response.get('Item', {})
 
 
 def set_ready(room_name, symbol, ready):

@@ -50,6 +50,9 @@ class Game extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
+            mySymbol: null,
+            ready: false,
+            otherReady: false,
             isPlaying: false,
             history: [{
                 squares: Array(9).fill(null),
@@ -58,8 +61,6 @@ class Game extends React.Component {
             xIsNext: true,
         };
         this.client = null;
-        this.xReady = false;
-        this.yReady = false;
     }
 
     connect() {
