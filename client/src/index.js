@@ -99,6 +99,12 @@ class Game extends React.Component {
         }
     }
 
+    sendMessage(message) {
+        if (this.client && this.client.readyState === this.client.OPEN) {
+            this.client.send(JSON.stringify(message))
+        }
+    }
+
     handleClick(i) {
         const history = this.state.history.slice(0, this.state.stepNumber + 1);
         const current = history[history.length - 1];
@@ -152,8 +158,22 @@ class Game extends React.Component {
             <div className="game">
                 <button onClick={() => this.connect()}>Connect</button>
                 <button onClick={() => this.disconnect()}>Disconnect</button>
-                <button onClick={() => this.client.send("{\"type\":\"join_room\",\"payload\":{\"room_name\":\"HELLO_WORLD\"}}")}>Join Room</button>
-                <button onClick={() => this.client.send("{\"type\":\"leave_room\"}")}>Leave Room</button>
+
+                <button
+                    onClick={() => this.sendMessage({
+                        type: 'join_room',
+                        payload: {
+                            room_name: 'HELLO_ROOM'
+                        }
+                    })}
+                >Join Room</button>
+
+                <button
+                    onClick={() => this.sendMessage({
+                        type: 'leave_room'
+                    })}
+                >Leave Room</button>
+
                 <div className="game-board">
                     <Board 
                         squares={current.squares}
