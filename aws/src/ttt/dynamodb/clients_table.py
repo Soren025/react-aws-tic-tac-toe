@@ -84,4 +84,4 @@ def clear_room(connection_id):
         ReturnValues='UPDATED_OLD',
     )
 
-    return response.get('Item')
+    return response.get('Attributes')

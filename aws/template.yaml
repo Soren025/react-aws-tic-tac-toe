@@ -171,6 +171,27 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
 
+  # Route: LeaveRoom
+  WebSocketLeaveRoomRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: leave_room
+      Target: !Sub integrations/${WebSocketLeaveRoomIntegration}
+  WebSocketLeaveRoomIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebSocketLeaveRoomFunction.Arn}/invocations
+  WebSocketLeaveRoomPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebSocketLeaveRoomFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*
+
   # ----- Functions ----- #
 
   # Web Socket
@@ -209,6 +230,11 @@ Resources:
         - ${NamePrefix}_ws_default
         - NamePrefix: !FindInMap [General, Stack, NamePrefix]
       Handler: ttt/functions/api/ws/default.lambda_handler
+      Policies:
+        - Statement:
+            Effect: Allow
+            Action: execute-api:ManageConnections
+            Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${WebSocketStage}/POST/@connections/*
 
   WebSocketJoinRoomFunction:
     Type: AWS::Serverless::Function
@@ -217,6 +243,23 @@ Resources:
         - ${NamePrefix}_ws_join_room
         - NamePrefix: !FindInMap [General, Stack, NamePrefix]
       Handler: ttt/functions/api/ws/join_room.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ClientsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomsTable
+        - Statement:
+            Effect: Allow
+            Action: execute-api:ManageConnections
+            Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${WebSocketStage}/POST/@connections/*
+
+  WebSocketLeaveRoomFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub
+        - ${NamePrefix}_ws_leave_room
+        - NamePrefix: !FindInMap [General, Stack, NamePrefix]
+      Handler: ttt/functions/api/ws/leave_room.lambda_handler
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ClientsTable

@@ -2,9 +2,9 @@ import os
 
 from botocore.exceptions import ClientError
 
-from ttt import game
-
 from . import dynamodb
+from ttt import game
+from ttt import utils
 
 
 class AttributeNames:
@@ -159,7 +159,7 @@ def start_game(room_name):
         ReturnValues='UPDATED_NEW'
     )
 
-    return response['Attributes'][AttributeNames.STATE]
+    return utils.replace_decimals(response['Attributes'][AttributeNames.STATE])
 
 
 def get_state(room_name):
@@ -172,7 +172,7 @@ def get_state(room_name):
         ProjectionExpression='#state',
     )
 
-    return response['Item'][AttributeNames.STATE]
+    return utils.replace_decimals(response['Item'][AttributeNames.STATE])
 
 
 def set_state(room_name, state):

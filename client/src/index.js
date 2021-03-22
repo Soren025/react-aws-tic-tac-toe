@@ -63,7 +63,7 @@ class Game extends React.Component {
     }
 
     connect() {
-        if (!this.client) {
+        if (this.client === null) {
             this.client = new W3CWebSocketClient('wss://nwsd1x3b66.execute-api.us-east-2.amazonaws.com/prod');
             this.client.onerror = this.onClientError;
             this.client.onopen = this.onClientOpen;
@@ -90,7 +90,7 @@ class Game extends React.Component {
 
     onClientClose() {
         this.client = null;
-        console.log('echo-protocol Client Closed');
+        console.log('Client Closed');
     }
 
     onClientMessage(message) {
@@ -150,6 +150,10 @@ class Game extends React.Component {
 
         return (
             <div className="game">
+                <button onClick={() => this.connect()}>Connect</button>
+                <button onClick={() => this.disconnect()}>Disconnect</button>
+                <button onClick={() => this.client.send("{\"type\":\"join_room\",\"payload\":{\"room_name\":\"HELLO_WORLD\"}}")}>Join Room</button>
+                <button onClick={() => this.client.send("{\"type\":\"leave_room\"}")}>Leave Room</button>
                 <div className="game-board">
                     <Board 
                         squares={current.squares}
