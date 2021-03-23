@@ -74,4 +74,6 @@ def clear_room(connection_id):
         ReturnValues='UPDATED_OLD',
     )
 
-    return response.get('Item', {}).get(AttributeNames.ROOM_NAME)
+    print(response)
+
+    return response.get('Attributes', {}).get(AttributeNames.ROOM_NAME)

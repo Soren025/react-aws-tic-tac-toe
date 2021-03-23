@@ -15,6 +15,10 @@ def lambda_handler(event, context):
             new_state = utils.replace_decimals(new_state)
             for room_connection_id in rooms_table.get_connection_ids(room_name):
                 ws.send_message(room_connection_id, 'state', new_state)
+    return {
+        'statusCode': 200,
+        'body': 'Success',
+    }
 
 
 def jump_to(room_name, step):
@@ -29,4 +33,4 @@ def jump_to(room_name, step):
     state[rooms_table.StateAttributeNames.STEP_NUMBER] = step
     state[rooms_table.StateAttributeNames.X_IS_NEXT] = (step % 2) == 0
 
-    return rooms_table.update(room_name, state, version) if state else None
+    return state if rooms_table.update(room_name, state, version) else None

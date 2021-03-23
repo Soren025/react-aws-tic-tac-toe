@@ -25,8 +25,13 @@ def lambda_handler(event, context):
         new_state = handle_click(room_name, index)
         if new_state is not None:
             new_state = utils.replace_decimals(new_state)
+            print(new_state)
             for room_connection_id in rooms_table.get_connection_ids(room_name):
                 ws.send_message(room_connection_id, 'state', new_state)
+    return {
+        'statusCode': 200,
+        'body': 'Success',
+    }
 
 
 def handle_click(room_name, index):
@@ -35,7 +40,7 @@ def handle_click(room_name, index):
     version = room[rooms_table.AttributeNames.VERSION]
 
     x_is_next = state[rooms_table.StateAttributeNames.X_IS_NEXT]
-    step_number = state[rooms_table.StateAttributeNames.STEP_NUMBER]
+    step_number = utils.replace_decimals(state[rooms_table.StateAttributeNames.STEP_NUMBER])
     history = state[rooms_table.StateAttributeNames.HISTORY][0:step_number + 1]
 
     squares = history[-1]
@@ -43,15 +48,18 @@ def handle_click(room_name, index):
         return None
 
     new_squares = squares.copy()
-    new_squares[index] = state[rooms_table.StateAttributeNames.X_IS_NEXT] if 'X' else 'O'
+    new_squares[index] = 'X' if state[rooms_table.StateAttributeNames.X_IS_NEXT] else 'O'
+    history.append(new_squares)
 
     new_state = {
-        rooms_table.StateAttributeNames.HISTORY: history.append(new_squares),
+        rooms_table.StateAttributeNames.HISTORY: history,
         rooms_table.StateAttributeNames.STEP_NUMBER: step_number + 1,
         rooms_table.StateAttributeNames.X_IS_NEXT: not x_is_next
     }
 
-    return rooms_table.update(room_name, new_state, version) if new_state else None
+    print(new_state)
+
+    return new_state if rooms_table.update(room_name, new_state, version) else None
 
 
 def calculate_winner(squares):

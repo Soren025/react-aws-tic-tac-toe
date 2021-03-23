@@ -50,12 +50,16 @@ class Game extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
+            roomName: '',
             history: [{
                 squares: Array(9).fill(null),
             }],
             stepNumber: 0,
             xIsNext: true,
         };
+    }
+
+    componentDidMount() {
         this.client = null;
         this.connect();
     }
@@ -63,10 +67,10 @@ class Game extends React.Component {
     connect() {
         if (!this.client) {
             this.client = new W3CWebSocketClient('wss://0re9rbthv8.execute-api.us-east-2.amazonaws.com/prod');
-            this.client.onerror = this.onClientError;
-            this.client.onopen = this.onClientOpen;
-            this.client.onclose = this.onClientClose;
-            this.client.onmessage = this.onClientMessage;
+            this.client.onerror = this.onClientError.bind(this);
+            this.client.onopen = this.onClientOpen.bind(this);
+            this.client.onclose = this.onClientClose.bind(this);
+            this.client.onmessage = this.onClientMessage.bind(this);
         }
     }
 
@@ -91,10 +95,10 @@ class Game extends React.Component {
         console.log('Client Closed');
     }
 
-    onClientMessage(wsMessage) {
-        if (typeof wsMessage.data === 'string') {
-            console.log('Message: ' + wsMessage.data);
-            const message = JSON.parse(wsMessage.data);
+    onClientMessage(e) {
+        if (typeof e.data === 'string') {
+            console.log('Message: ' + e.data);
+            const message = JSON.parse(e.data);
             if (message.type === 'state') {
                 const state = message.payload;
                 const history = [];
@@ -107,7 +111,7 @@ class Game extends React.Component {
                     history: history,
                     stepNumber: state.step_number,
                     xIsNext: state.x_is_next,
-                })
+                });
             }
         }
     }
@@ -142,9 +146,11 @@ class Game extends React.Component {
         const winner = calculateWinner(current.squares);
 
         const moves = history.map((step, move) => {
-            const desc = move ?
+            let desc = move ?
                 'Go to move #' + move :
                 'Go to game start';
+            if (move === this.state.stepNumber)
+                desc += ' ***';
             return (
                 <li key={move}>
                     <button onClick={() => this.jumpTo(move)}>{desc}</button>
@@ -162,31 +168,59 @@ class Game extends React.Component {
         }
 
         return (
-            <div className="game">
-                <button
-                    onClick={() => this.sendMessage({
-                        type: 'join_room',
-                        payload: {
-                            room_name: 'HELLO_ROOM'
-                        }
-                    })}
-                >Join Room</button>
+            <div>
+                <div>
+                    <button
+                        onClick={() => {
+                            if (this.state.roomName === '')
+                                return;
+                            this.sendMessage({
+                                type: 'join_room',
+                                payload: {
+                                    room_name: this.state.roomName,
+                                }
+                            })
+                        }}
+                    >Join Room</button>
 
-                <button
-                    onClick={() => this.sendMessage({
-                        type: 'leave_room'
-                    })}
-                >Leave Room</button>
+                    <form>
+                        <input
+                            type='text'
+                            onChange={e => {
+                                this.setState({
+                                    roomName: e.target.value,
+                                })
+                            }}
+                        >
+                        </input>
+                    </form>
 
-                <div className="game-board">
-                    <Board 
-                        squares={current.squares}
-                        onClick={i => this.handleClick(i)}
-                    />
+                    <button
+                        onClick={() => {
+                            this.sendMessage({
+                                type: 'leave_room',
+                            });
+                            this.setState({
+                                history: [{
+                                    squares: Array(9).fill(null),
+                                }],
+                                stepNumber: 0,
+                                xIsNext: true,
+                            })
+                        }}
+                    >Leave Room</button>
                 </div>
-                <div className="game-info">
-                    <div>{status}</div>
-                    <ol>{moves}</ol>
+                <div className="game">
+                    <div className="game-board">
+                        <Board 
+                            squares={current.squares}
+                            onClick={i => this.handleClick(i)}
+                        />
+                    </div>
+                    <div className="game-info">
+                        <div>{status}</div>
+                        <ol>{moves}</ol>
+                    </div>
                 </div>
             </div>
         );
