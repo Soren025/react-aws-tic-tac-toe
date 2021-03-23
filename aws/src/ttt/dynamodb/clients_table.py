@@ -6,7 +6,6 @@ from . import dynamodb
 class AttributeNames:
     CONNECTION_ID = 'connection_id'
     ROOM_NAME = 'room_name'
-    SYMBOL = 'symbol'
 
 
 table = dynamodb.Table(os.getenv('CLIENTS_TABLE_NAME'))
@@ -33,30 +32,23 @@ def remove(connection_id):
         ReturnValues='ALL_OLD',
     )
 
-    attributes = response['Attributes']
-    if AttributeNames.ROOM_NAME in attributes:
-        return {
-            AttributeNames.ROOM_NAME: attributes[AttributeNames.ROOM_NAME],
-            AttributeNames.SYMBOL: attributes[AttributeNames.SYMBOL],
-        }
-    else:
-        return None
+    return response.get('Attributes', {}).get(AttributeNames.ROOM_NAME)
 
 
-def set_room(connection_id, room_name, symbol):
-    table.update_item(
+def set_room(connection_id, room_name):
+    response = table.update_item(
         Key=generate_key(connection_id),
         ExpressionAttributeNames={
             '#room_name': AttributeNames.ROOM_NAME,
-            '#symbol': AttributeNames.SYMBOL,
         },
         ExpressionAttributeValues={
             ':room_name': room_name,
-            ':symbol': symbol,
         },
-        UpdateExpression='SET #room_name = :room_name, #symbol = :symbol',
-        ReturnValues='NONE',
+        UpdateExpression='SET #room_name = :room_name',
+        ReturnValues='UPDATED_OLD',
     )
+
+    return response.get('Attributes', {}).get(AttributeNames.ROOM_NAME)
 
 
 def get_room(connection_id):
@@ -65,12 +57,11 @@ def get_room(connection_id):
         ConsistentRead=True,
         ExpressionAttributeNames={
             '#room_name': AttributeNames.ROOM_NAME,
-            '#symbol': AttributeNames.SYMBOL,
         },
-        ProjectionExpression='#room_name, #symbol'
+        ProjectionExpression='#room_name'
     )
 
-    return response.get('Item')
+    return response.get('Item', {}).get(AttributeNames.ROOM_NAME)
 
 
 def clear_room(connection_id):
@@ -78,10 +69,9 @@ def clear_room(connection_id):
         Key=generate_key(connection_id),
         ExpressionAttributeNames={
             '#room_name': AttributeNames.ROOM_NAME,
-            '#symbol': AttributeNames.SYMBOL,
         },
-        UpdateExpression='REMOVE #room_name, #symbol',
+        UpdateExpression='REMOVE #room_name',
         ReturnValues='UPDATED_OLD',
     )
 
-    return response.get('Attributes')
+    return response.get('Item', {}).get(AttributeNames.ROOM_NAME)

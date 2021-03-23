@@ -50,10 +50,6 @@ class Game extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
-            mySymbol: null,
-            ready: false,
-            otherReady: false,
-            isPlaying: false,
             history: [{
                 squares: Array(9).fill(null),
             }],
@@ -61,11 +57,12 @@ class Game extends React.Component {
             xIsNext: true,
         };
         this.client = null;
+        this.connect();
     }
 
     connect() {
         if (!this.client) {
-            this.client = new W3CWebSocketClient('wss://nwsd1x3b66.execute-api.us-east-2.amazonaws.com/prod');
+            this.client = new W3CWebSocketClient('wss://0re9rbthv8.execute-api.us-east-2.amazonaws.com/prod');
             this.client.onerror = this.onClientError;
             this.client.onopen = this.onClientOpen;
             this.client.onclose = this.onClientClose;
@@ -94,9 +91,24 @@ class Game extends React.Component {
         console.log('Client Closed');
     }
 
-    onClientMessage(message) {
-        if (typeof message.data === 'string') {
-            console.log("Received: '" + message.data + "'");
+    onClientMessage(wsMessage) {
+        if (typeof wsMessage.data === 'string') {
+            console.log('Message: ' + wsMessage.data);
+            const message = JSON.parse(wsMessage.data);
+            if (message.type === 'state') {
+                const state = message.payload;
+                const history = [];
+                state.history.forEach(squares => {
+                    history.push({
+                        squares: squares,
+                    });
+                });
+                this.setState({
+                    history: history,
+                    stepNumber: state.step_number,
+                    xIsNext: state.x_is_next,
+                })
+            }
         }
     }
 
@@ -107,27 +119,21 @@ class Game extends React.Component {
     }
 
     handleClick(i) {
-        const history = this.state.history.slice(0, this.state.stepNumber + 1);
-        const current = history[history.length - 1];
-        const squares = current.squares.slice();
-        if (calculateWinner(squares) || squares[i]) {
-            return;
-        }
-        squares[i] = this.state.xIsNext ? 'X' : 'O';
-        this.setState({
-            history: history.concat([{
-                squares: squares
-            }]),
-            stepNumber: history.length,
-            xIsNext: !this.state.xIsNext,
-        })
+        this.sendMessage({
+            type: 'click_square',
+            payload: {
+                'index': i,
+            },
+        });
     }
 
     jumpTo(step) {
-        this.setState({
-            stepNumber: step,
-            xIsNext: (step % 2) === 0,
-        })
+        this.sendMessage({
+            type: 'jump_to',
+            payload: {
+                'step': step,
+            },
+        });
     }
 
     render() {
@@ -157,9 +163,6 @@ class Game extends React.Component {
 
         return (
             <div className="game">
-                <button onClick={() => this.connect()}>Connect</button>
-                <button onClick={() => this.disconnect()}>Disconnect</button>
-
                 <button
                     onClick={() => this.sendMessage({
                         type: 'join_room',
